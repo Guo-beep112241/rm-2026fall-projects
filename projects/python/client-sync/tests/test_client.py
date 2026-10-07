@@ -1,3 +1,5 @@
+import json
+
 import httpx
 
 from text_service.client import build_text, exchange
@@ -39,3 +41,20 @@ def test_build_text_literal_marker() -> None:
 def test_build_text_stops_at_marker() -> None:
     # 遇到单独一行的结束标记就停止，其后内容忽略
     assert build_text(["a", ".", "b"]) == "a"
+
+
+def test_exchange_put_with_token_and_body() -> None:
+    # PUT 请求要带对：方法、路径、鉴权头，以及正确的 JSON 请求体
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.method == "PUT"
+        assert request.url.path == "/texts/note"
+        assert request.headers["Authorization"] == "Bearer example"
+        assert json.loads(request.content) == {"text": "你好\nRM"}
+        return httpx.Response(200, json={"data": None})
+
+    with httpx.Client(
+        base_url="http://localhost", transport=httpx.MockTransport(respond)
+    ) as client:
+        status, result = exchange(client, "PUT", "/texts/note", "example", {"text": "你好\nRM"})
+        assert status == 200
+        assert result == {"data": None}

@@ -37,7 +37,7 @@ def build_text(lines: list[str]) -> str:
             result.append(END_MARKER)  # 两个标记 = 正文里的一行「.」
         else:
             result.append(line)
-    return "\n".join(result) #把拼接好的所有内容作为返回值返回
+    return "\n".join(result)  # 把拼接好的所有内容作为返回值返回
 
 
 def read_multiline(prompt: str = "> ") -> str:
@@ -85,13 +85,24 @@ def main() -> None:
                     method, path = "POST", "/echo"
                     print("逐行输入文本；单独一行「.」结束，单独一行「..」表示正文里的一个「.」。")
                     body = {"text": read_multiline()}
-                elif command in ("delete-user", "put", "get", "delete"):
+                elif command == "put":
+                    # PUT /texts/{name}：上传或覆盖一篇文本，需要登录。
+                    name = input("name: ")
+                    print("逐行输入文本；单独一行「.」结束，单独一行「..」表示正文里的一个「.」。")
+                    method, path = "PUT", f"/texts/{name}" #f"/texts/{name}" 里的 {name} 会被 Python 替换成 name 变量的值。
+                    body = {"text": read_multiline()}
+                elif command == "get":
+                    # GET /texts/{name}：读取一篇文本，需要登录，无请求体。
+                    name = input("name: ")
+                    method, path = "GET", f"/texts/{name}"
+                elif command in ("delete-user", "delete"):
                     print("This task is not implemented in the starting code yet.")
                     continue
                 else:
                     print("Unknown command.")
                     continue
                 try:
+                    #只要你在 login 成功后，token 变量里有值，之后所有的 put/get 就会自动带上 Authorization: Bearer <token> 头。没登录就调用，token 是空字符串，不带认证头，服务端返回 401。
                     status, result = exchange(client, method, path, token, body)
                     print(status, result)
                     if command == "login" and status == 200:
