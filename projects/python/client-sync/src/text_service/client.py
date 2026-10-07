@@ -17,6 +17,40 @@ def exchange(
     return response.status_code, result
 
 
+# 多行输入的结束标记：用户单独输入一行「.」表示输入结束。
+# 正文里想表达一行「.」时，输入「..」（连续两个标记）来转义。
+END_MARKER = "."
+
+
+def build_text(lines: list[str]) -> str:
+    """把按行读入的原始内容拼成最终文本。
+    - 单独一行「.」是结束标记，它本身不进入正文（遇到就停止）；
+    - 单独一行「..」表示正文里真的想要一行「.」（转义）；
+    - 其余行原样保留，最后用换行符连接。
+    这样空行、空文本、末尾换行、Unicode，以及「等于结束标记的那一行」都能表达。
+    """
+    result: list[str] = []
+    for line in lines:
+        if line == END_MARKER:
+            break  # 结束
+        if line == END_MARKER * 2:
+            result.append(END_MARKER)  # 两个标记 = 正文里的一行「.」
+        else:
+            result.append(line)
+    return "\n".join(result) #把拼接好的所有内容作为返回值返回
+
+
+def read_multiline(prompt: str = "> ") -> str:
+    """从终端循环读取多行，直到遇到单独一行的结束标记，再交给 build_text 解释。"""
+    lines: list[str] = []
+    while True:
+        line = input(prompt)
+        if line == END_MARKER:
+            break  # 负责判断转义的结束，具体的转义解释交给 build_text
+        lines.append(line)
+    return build_text(lines)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://127.0.0.1:7878")
@@ -46,7 +80,12 @@ def main() -> None:
                         "logout": ("DELETE", "/sessions/current"),
                         "list": ("GET", "/texts"),
                     }[command]
-                elif command in ("echo", "delete-user", "put", "get", "delete"):
+                elif command == "echo":
+                    # POST /echo：把输入放进 text 字段，服务端原样返回，无需登录。
+                    method, path = "POST", "/echo"
+                    print("逐行输入文本；单独一行「.」结束，单独一行「..」表示正文里的一个「.」。")
+                    body = {"text": read_multiline()}
+                elif command in ("delete-user", "put", "get", "delete"):
                     print("This task is not implemented in the starting code yet.")
                     continue
                 else:
