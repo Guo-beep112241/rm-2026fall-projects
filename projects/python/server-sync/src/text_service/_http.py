@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         logger.info("  %s %s", method, path)
     yield
 
-
+#读请求体
 async def read_body(request: Request) -> Any:
     if request.method not in ("POST", "PUT"):
         return None
@@ -39,7 +39,7 @@ async def read_body(request: Request) -> Any:
             parse_constant=lambda value: (_ for _ in ()).throw(ValueError(value)),
         )
     except (ValueError, UnicodeError) as exc:
-        raise HTTPException(400, "Expected UTF-8 JSON") from exc
+        raise HTTPException(400, "Expected UTF-8 JSON") from exc #json解析失败，返回400错误
 
 
 def create_app(service: Service) -> FastAPI:
@@ -69,13 +69,16 @@ def create_app(service: Service) -> FastAPI:
             )
 
     @app.api_route(
+        #"/{path:path}" 意思是「任何路径都收到我这里来」。
         "/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS"]
     )
+    #把http中的method、path、body、Authorization 头都塞给 service.handle()处理。
     def dispatch(request: Request, body: Annotated[Any, Depends(read_body)]) -> JSONResponse:
         # FastAPI runs this synchronous handler in a thread pool.
         status, result = service.handle(
             request.method, request.url.path, body, request.headers.get("Authorization", "")
         )
+        #service.handle() 返回的 (状态码, 字典)，再包成 HTTP 响应发回去。
         return JSONResponse(result, status_code=status)
 
     return app

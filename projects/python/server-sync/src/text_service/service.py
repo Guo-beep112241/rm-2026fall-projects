@@ -8,6 +8,7 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
+#已实现接口清单
 ROUTES = (
     ("GET", "/ping"),
     ("POST", "/users"),
@@ -16,7 +17,7 @@ ROUTES = (
     ("GET", "/texts"),
 )
 
-
+#路径不在清单中，返回404，路径在但方法不对，返回405
 def route_error(method: str, path: str) -> int | None:
     allowed = next((verb for verb, route in ROUTES if route == path), None)
     if allowed is None:
@@ -24,8 +25,10 @@ def route_error(method: str, path: str) -> int | None:
     return None if method == allowed else 405
 
 
+
 @dataclass
 class User:
+    #密码的哈希（salt+digest，不直接存明文代码）
     salt: bytes
     digest: bytes
     token: str | None = None
@@ -34,8 +37,8 @@ class User:
 
 class Service:
     def __init__(self) -> None:
-        self.users: dict[str, User] = {}
-        self.lock = threading.Lock()
+        self.users: dict[str, User] = {} #所有用户
+        self.lock = threading.Lock() #锁，保证同一时刻只有一个人能改（共享状态保护）
 
     def handle(
         self, method: str, path: str, body: Any, authorization: str
