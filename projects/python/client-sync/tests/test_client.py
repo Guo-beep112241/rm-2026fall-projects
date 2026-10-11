@@ -58,3 +58,20 @@ def test_exchange_put_with_token_and_body() -> None:
         status, result = exchange(client, "PUT", "/texts/note", "example", {"text": "你好\nRM"})
         assert status == 200
         assert result == {"data": None}
+
+
+def test_exchange_delete_with_token() -> None:
+    # DELETE 请求：方法、路径、鉴权头正确，且不带请求体
+    def respond(request: httpx.Request) -> httpx.Response:
+        assert request.method == "DELETE"
+        assert request.url.path == "/texts/note"
+        assert request.headers["Authorization"] == "Bearer example"
+        assert request.content == b""
+        return httpx.Response(200, json={"data": None})
+
+    with httpx.Client(
+        base_url="http://localhost", transport=httpx.MockTransport(respond)
+    ) as client:
+        status, result = exchange(client, "DELETE", "/texts/note", "example")
+        assert status == 200
+        assert result == {"data": None}
