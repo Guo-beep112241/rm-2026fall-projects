@@ -77,6 +77,32 @@ def test_exchange_delete_with_token() -> None:
         assert result == {"data": None}
 
 
+def test_exchange_non_json_body() -> None:
+    # 响应体不是合法 JSON 时：仍返回状态码，并把原始文本塞进 message
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(502, text="Bad Gateway")
+
+    with httpx.Client(
+        base_url="http://localhost", transport=httpx.MockTransport(respond)
+    ) as client:
+        status, result = exchange(client, "GET", "/ping")
+        assert status == 502
+        assert result == {"message": "Bad Gateway"}
+
+
+def test_exchange_empty_body() -> None:
+    # 响应体为空（缺失）时：仍返回状态码，message 为空字符串
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(204)
+
+    with httpx.Client(
+        base_url="http://localhost", transport=httpx.MockTransport(respond)
+    ) as client:
+        status, result = exchange(client, "GET", "/ping")
+        assert status == 204
+        assert result == {"message": ""}
+
+
 def test_handle_token_login_success() -> None:
     # 登录成功：把新 token 存下来
     assert handle_token("login", 200, {"data": {"token": "abc"}}, "") == "abc"
