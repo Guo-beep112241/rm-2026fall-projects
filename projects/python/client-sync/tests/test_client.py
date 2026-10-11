@@ -2,7 +2,7 @@ import json
 
 import httpx
 
-from text_service.client import build_text, exchange
+from text_service.client import build_text, exchange, handle_token
 
 
 def test_request() -> None:
@@ -75,3 +75,32 @@ def test_exchange_delete_with_token() -> None:
         status, result = exchange(client, "DELETE", "/texts/note", "example")
         assert status == 200
         assert result == {"data": None}
+
+
+def test_handle_token_login_success() -> None:
+    # 登录成功：把新 token 存下来
+    assert handle_token("login", 200, {"data": {"token": "abc"}}, "") == "abc"
+
+
+def test_handle_token_login_401_clears() -> None:
+    # 登录失败（401）也会清空本地 token
+    assert handle_token("login", 401, {"message": "密码错误"}, "old") == ""
+
+
+def test_handle_token_logout_clears() -> None:
+    assert handle_token("logout", 200, {"data": None}, "old") == ""
+
+
+def test_handle_token_delete_user_clears() -> None:
+    # 注销账号成功：清空本地 token（2.5 的核心行为）
+    assert handle_token("delete-user", 200, {"data": None}, "old") == ""
+
+
+def test_handle_token_401_clears() -> None:
+    # 任意受保护接口返回 401 都清 token
+    assert handle_token("list", 401, {"message": "请先登录"}, "old") == ""
+
+
+def test_handle_token_other_keeps() -> None:
+    # 其他成功操作（如 put 200）不动 token
+    assert handle_token("put", 200, {"data": None}, "old") == "old"

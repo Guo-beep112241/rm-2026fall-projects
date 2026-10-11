@@ -51,6 +51,21 @@ def read_multiline(prompt: str = "> ") -> str:
     return build_text(lines)
 
 
+def handle_token(command: str, status: int, result: Any, token: str) -> str:
+    """根据「命令 + 响应状态」决定本地 token 该怎么更新，返回新的 token。
+
+    - login 成功（200）：把响应里的新 token 存下来；
+    - logout / delete-user 成功（200），或任何 401：清空本地 token；
+    - 其他情况：token 保持不变。
+    把这段逻辑抽成纯函数，是为了方便单测（见 tests 里的 handle_token 系列测试）。
+    """
+    if command == "login" and status == 200:
+        return result["data"]["token"]
+    if status == 401 or (command in ("logout", "delete-user") and status == 200):
+        return ""
+    return token
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--url", default="http://127.0.0.1:7878")
@@ -103,8 +118,9 @@ def main() -> None:
                     name = input("name: ")
                     method, path = "DELETE", f"/texts/{name}"
                 elif command == "delete-user":
-                    print("This task is not implemented in the starting code yet.")
-                    continue
+                    # DELETE /users/me：注销当前账号，服务端会连同文本和令牌一起删除。
+                    # 路径固定是 /users/me：删的是「谁」由令牌决定，不在路径里写名字。
+                    method, path = "DELETE", "/users/me"
                 else:
                     print("Unknown command.")
                     continue
@@ -112,12 +128,9 @@ def main() -> None:
                     # 只要你在 login 成功后，token 变量里有值，之后所有的 put/get 就会自动带上 Authorization: Bearer <token> 头。没登录就调用，token 是空字符串，不带认证头，服务端返回 401。
                     status, result = exchange(client, method, path, token, body)
                     print(status, result)
-                    if command == "login" and status == 200:
-                        token = result["data"]["token"]
                     if status == 401:
                         print("Please log in again.")
-                    if status == 401 or (command == "logout" and status == 200):
-                        token = ""
+                    token = handle_token(command, status, result, token)
                 except (httpx.HTTPError, ValueError, KeyError) as exc:
                     print(f"Request failed: {exc}")
         except (EOFError, KeyboardInterrupt):
