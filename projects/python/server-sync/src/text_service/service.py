@@ -8,16 +8,22 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any
 
-#已实现接口清单
+# 已实现接口清单：每实现一个接口就在下面加一行。
 ROUTES = (
     ("GET", "/ping"),
+    ("POST", "/echo"),
     ("POST", "/users"),
     ("POST", "/sessions"),
     ("DELETE", "/sessions/current"),
     ("GET", "/texts"),
 )
 
-#路径不在清单中，返回404，路径在但方法不对，返回405
+
+# 单篇文本的 UTF-8 字节数上限，echo 与文本接口共用。
+TEXT_MAX_BYTES = 65_536
+
+
+# 路径不在清单中，返回404，路径在但方法不对，返回405
 def route_error(method: str, path: str) -> int | None:
     allowed = next((verb for verb, route in ROUTES if route == path), None)
     if allowed is None:
@@ -25,10 +31,9 @@ def route_error(method: str, path: str) -> int | None:
     return None if method == allowed else 405
 
 
-
 @dataclass
 class User:
-    #密码的哈希（salt+digest，不直接存明文代码）
+    # 密码的哈希（salt+digest，不直接存明文代码）
     salt: bytes
     digest: bytes
     token: str | None = None
@@ -37,8 +42,8 @@ class User:
 
 class Service:
     def __init__(self) -> None:
-        self.users: dict[str, User] = {} #所有用户
-        self.lock = threading.Lock() #锁，保证同一时刻只有一个人能改（共享状态保护）
+        self.users: dict[str, User] = {}  # 所有用户
+        self.lock = threading.Lock()  # 锁，保证同一时刻只有一个人能改（共享状态保护）
 
     def handle(
         self, method: str, path: str, body: Any, authorization: str
@@ -47,6 +52,22 @@ class Service:
             return status, {"message": "Not found" if status == 404 else "Method not allowed"}
         if method == "GET" and path == "/ping":
             return 200, {"data": "pong"}
+        if method == "POST" and path == "/echo":
+            # echo 是公开接口：请求体必须是一个「只含 text 字段」的对象。
+            if not isinstance(body, dict) or set(body) != {"text"}:
+                return 400, {"message": "Expected exactly a text field"}
+            text = body["text"]
+            # text 必须是字符串，类型不自动转换。
+            if not isinstance(text, str):
+                return 400, {"message": "text must be a string"}
+            try:
+                # 按 UTF-8 字节数限长；含未配对代理码位时编码会失败，同样视为非法文本。
+                if len(text.encode("utf-8")) > TEXT_MAX_BYTES:
+                    return 413, {"message": "Text too large"}
+            except UnicodeEncodeError:
+                return 400, {"message": "Text must be valid Unicode"}
+            # 原样返回：Unicode、换行、空字符串全部保留。
+            return 200, {"data": text}
         if path in ("/users", "/sessions") and method == "POST":
             if not isinstance(body, dict) or set(body) != {"username", "password"}:
                 return 400, {"message": "Expected username and password"}

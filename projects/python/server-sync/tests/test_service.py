@@ -1,4 +1,4 @@
-from text_service.service import Service
+from text_service.service import TEXT_MAX_BYTES, Service
 
 
 def test_account_lifecycle() -> None:
@@ -27,6 +27,18 @@ def test_validation() -> None:
         {"username": "a/b", "password": "password1"},
     ):
         assert service.handle("POST", "/users", body, "")[0] == 400
+
+
+def test_echo() -> None:
+    service = Service()
+    # 回显原样往返：Unicode、换行、空字符串
+    assert service.handle("POST", "/echo", {"text": "你好\nRM"}, "") == (200, {"data": "你好\nRM"})
+    assert service.handle("POST", "/echo", {"text": ""}, "") == (200, {"data": ""})
+    # 字段不合法 → 400
+    for body in (None, [], {}, {"text": 42}, {"text": "a", "extra": 1}):
+        assert service.handle("POST", "/echo", body, "")[0] == 400
+    # 文本超限 → 413（一个「汉」占 3 字节，取超过上限的最少数量）
+    assert service.handle("POST", "/echo", {"text": "汉" * (TEXT_MAX_BYTES // 3 + 1)}, "")[0] == 413
 
 
 def test_concurrent_registration() -> None:
